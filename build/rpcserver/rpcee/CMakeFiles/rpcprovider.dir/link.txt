@@ -1,0 +1,1 @@
+/usr/bin/c++  -g  -rdynamic CMakeFiles/rpcprovider.dir/searchservice.cc.o CMakeFiles/rpcprovider.dir/__/search.pb.cc.o  -o ../../../bin/rpcprovider  -L/usr/lib64/mysql  -L/root/mychatserver/lib -Wl,-rpath,/usr/lib64/mysql:/root/mychatserver/lib -lmprpc -lprotobuf -lmysqlclient -lhiredis -lpthread -lzookeeper_mt 

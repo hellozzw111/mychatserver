@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+package fixbug;
+
+option cc_generic_services = true;
+
+message ResultCode
+{
+    int32 errcode = 1; 
+    bytes errmsg = 2;
+}
+
+message SearchUsersRequest
+{
+    uint32 id = 1;
+}
+
+message Users{
+    uint32 id = 1;
+    bytes name = 2;
+    bytes state = 3;
+}
+message SearchUsersResponse
+{
+    ResultCode result = 1;
+    repeated Users users_list = 2;
+}
+
+message SearchFriendsRequest{
+    uint32 id = 1;
+}
+
+message Friends{
+    uint32 id = 1;
+}
+
+message SearchFriendsResponse{
+    ResultCode  result = 1;
+    repeated Friends friends_list = 2;
+}
+
+service SearchServiceRpc
+{
+    rpc SearchUsers(SearchUsersRequest) returns(SearchUsersResponse);
+    rpc SearchFriends(SearchFriendsRequest) returns(SearchFriendsResponse);
+}
