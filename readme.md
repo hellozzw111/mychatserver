@@ -15,7 +15,7 @@
 * MySql
 * Nginx
 * Json
-* Dafka
+* Kafkia
 * Protobuf
 * Muduo
 * Redis
