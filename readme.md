@@ -20,7 +20,7 @@
 * Muduo
 * Redis
 * Zookeeper
-* Cmke
+* Cmake
 
 ## 目录树
 ```
