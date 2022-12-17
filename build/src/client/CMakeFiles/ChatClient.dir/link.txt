@@ -1,1 +1,0 @@
-/usr/bin/c++  -g  -rdynamic CMakeFiles/ChatClient.dir/main.cpp.o CMakeFiles/ChatClient.dir/__/__/rpcserver/search.pb.cc.o  -o ../../../bin/ChatClient  -L/usr/lib64/mysql  -L/root/mychatserver/lib -Wl,-rpath,/usr/lib64/mysql:/root/mychatserver/lib -lpthread -lmprpc -lprotobuf -lzookeeper_mt 

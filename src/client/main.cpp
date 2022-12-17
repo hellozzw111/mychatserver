@@ -13,6 +13,9 @@ using json = nlohmann::json;
 #include <unistd.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <sys/mman.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <semaphore.h>
@@ -297,6 +300,22 @@ void doLoginResponse(json &responsejs)
     }
 }
 
+// 群文件下载响应函数
+void doGroupFileDownLoadResponse(json& responsejs)
+{
+    std::string download_path = "";
+    std::cout << "please input download path for file :";
+    std::cin >> download_path;
+    // 使用 fopen 函数来判断 download path 在本机是否存在
+
+}
+
+// 展示所有文件结构
+void doShowGroupFiles(std::string result)
+{
+    std::cout << result << std::endl;
+}
+
 // 子线程 - 接收线程
 void readTaskHandler(int clientfd)
 {
@@ -338,6 +357,20 @@ void readTaskHandler(int clientfd)
         {
             doRegResponse(js);
             sem_post(&rwsem);    // 通知主线程，注册结果处理完成
+            continue;
+        }
+
+        if (GROUP_FILE_DOWNLOAD_MSG_ACK == msgtype)
+        {
+            doGroupFileDownLoadResponse(js);
+            sem_post(&rwsem);
+            continue;
+        }
+
+        if(GROUP_FILE_GET_ALL_MSG == msgtype)
+        {
+            doShowGroupFiles(js["result"].get<std::string>());
+            sem_post(&rwsem);
             continue;
         }
     }
@@ -565,6 +598,131 @@ void groupchat(int clientfd, string str)
     {
         cerr << "send groupchat msg error -> " << buffer << endl;
     }
+}
+// "groupfileupload" command handler    groupid:filepath:uploadpath
+void groupfileupload(int clientfd, string str)
+{
+    int idx = str.find(":");
+    if (-1 == idx)
+    {
+        cerr << "groupfileupload command invalid!" << endl;
+        return;
+    }
+
+    int groupid = atoi(str.substr(0, idx).c_str());
+    string pathconf = str.substr(idx + 1, str.size() - idx);
+
+    idx = pathconf.find(":");
+    if (-1 == idx)
+    {
+        cerr << "groupfileupload command invalid!" << endl;
+        return;
+    }
+
+    string filepath = pathconf.substr(0, idx);
+    string uploadpath = pathconf.substr(idx + 1, pathconf.size() - idx);
+
+    // 根据 path 打开文件并传输
+    int fd = open(filepath.c_str(), O_RDWR | O_CREAT, S_IRUSR | S_IWUSR, 0666);
+    int length = 1;
+    char* addr = (char*)mmap(NULL, length, PROT_READ|PROT_WRITE, MAP_PRIVATE, fd, 0);
+    if(addr == MAP_FAILED)
+    {
+        cerr << "mmap failed!" << endl;
+        return;
+    }
+
+    json js;
+    js["msgid"] = GROUP_FILE_UPLOAD_MSG;
+    js["id"] = g_currentUser.getId();
+    js["name"] = g_currentUser.getName();
+    js["groupid"] = groupid;
+    js["contents"] = {addr, length};
+    js["uploadpath"] = uploadpath;
+    js["time"] = getCurrentTime();
+    string buffer = js.dump();
+
+    int len = send(clientfd, buffer.c_str(), strlen(buffer.c_str()) + 1, 0);
+    if (-1 == len)
+    {
+        cerr << "send groupchat msg error -> " << buffer << endl;
+    }
+    // 关闭 mmap 地址
+    if(munmap(addr, length) == -1)
+    {
+        cerr << "munmap fail!" << endl;
+        return;
+    }
+}
+// "groupfiledownload" command handler    groupid:path
+void groupfiledownload(int clientfd, string str)
+{
+    int idx = str.find(":");
+    if (-1 == idx)
+    {
+        cerr << "groupfileupload command invalid!" << endl;
+        return;
+    }
+
+    int groupid = atoi(str.substr(0, idx).c_str());
+    string path = str.substr(idx + 1, str.size() - idx);
+
+    json js;
+    js["msgid"] = GROUP_FILE_UPLOAD_MSG;
+    js["id"] = g_currentUser.getId();
+    js["name"] = g_currentUser.getName();
+    js["groupid"] = groupid;
+    js["downloadpath"] = path;
+    js["time"] = getCurrentTime();
+    string buffer = js.dump();
+
+    int len = send(clientfd, buffer.c_str(), strlen(buffer.c_str()) + 1, 0);
+    if (-1 == len)
+    {
+        cerr << "send groupchat msg error -> " << buffer << endl;
+    }
+}
+// "groupfiledownload" command handler    groupid:path
+void groupfiledelete(int clientfd, string str)
+{
+    int idx = str.find(":");
+    if (-1 == idx)
+    {
+        cerr << "groupfileupload command invalid!" << endl;
+        return;
+    }
+
+    int groupid = atoi(str.substr(0, idx).c_str());
+    string path = str.substr(idx + 1, str.size() - idx);
+
+    // 根据 path 打开文件并传输
+    int fd = open(path.c_str(), O_RDWR | O_CREAT, S_IRUSR | S_IWUSR, 0666);
+    int length = 1;
+    char* addr = (char*)mmap(NULL, length, PROT_READ|PROT_WRITE, MAP_PRIVATE, fd, 0);
+    if(addr == MAP_FAILED)
+    {
+        cerr << "mmap failed!" << endl;
+        return;
+    }
+
+    json js;
+    js["msgid"] = GROUP_FILE_UPLOAD_MSG;
+    js["id"] = g_currentUser.getId();
+    js["name"] = g_currentUser.getName();
+    js["groupid"] = groupid;
+    js["deletepath"] = path;
+    js["time"] = getCurrentTime();
+    string buffer = js.dump();
+
+    int len = send(clientfd, buffer.c_str(), strlen(buffer.c_str()) + 1, 0);
+    if (-1 == len)
+    {
+        cerr << "send groupchat msg error -> " << buffer << endl;
+    }
+}
+void showgroupfile(string result)
+{
+    std::cout << result << std::endl;
 }
 // "loginout" command handler
 void loginout(int clientfd, string)

@@ -5,6 +5,9 @@
 #include <unordered_map>
 #include <functional>
 #include <mutex>
+#include <mprpcchannel.h>
+#include <vector>
+#include <thread>
 using namespace std;
 using namespace muduo;
 using namespace muduo::net;
@@ -20,11 +23,11 @@ using json = nlohmann::json;
 #include "user.hpp"
 #include <zookeeperutil.h>
 #include "search.pb.h"
-#include <mprpcchannel.h>
-#include <vector>
-#include <thread>
 #include "producer.h"
 #include "consumer.h"
+#include "nameserver/dataserver_cli.h"
+#include "public.hpp"
+
 class Consumer;
 // 表示处理消息的事件回调方法类型
 using MsgHandler = std::function<void(const TcpConnectionPtr &conn, json &js, Timestamp)>;
@@ -52,6 +55,14 @@ public:
     void addGroup(const TcpConnectionPtr &conn, json &js, Timestamp time);
     // 群组聊天业务
     void groupChat(const TcpConnectionPtr &conn, json &js, Timestamp time);
+    // 群组文件上传
+    void groupfileupload(const TcpConnectionPtr &conn, json &js, Timestamp time);
+    // 群组文件下载
+    void groupfiledownload(const TcpConnectionPtr &conn, json &js, Timestamp time);
+    // 群组文件删除
+    void groupfiledelete(const TcpConnectionPtr &conn, json &js, Timestamp time);
+    // 获取群组文件结构
+    void groupallfile(const TcpConnectionPtr &conn, json &js, Timestamp time);
     // 处理注销业务
     void loginout(const TcpConnectionPtr &conn, json &js, Timestamp time);
     // 处理客户端异常退出
@@ -90,7 +101,8 @@ private:
     Producer* producer_;
     //消费者线程
     thread t;
-
+    mutex dataserver_cli_lock;
+    DataServerClient* dataserver_;
 };
 
 #endif

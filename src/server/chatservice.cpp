@@ -2,6 +2,7 @@
 #include "public.hpp"
 #include "logger.h"
 #include <vector>
+#include "nameserver/dataserver_cli.h"
 using namespace std;
 using namespace muduo;
 
@@ -26,6 +27,10 @@ ChatService::ChatService()
     _msgHandlerMap.insert({CREATE_GROUP_MSG, std::bind(&ChatService::createGroup, this, _1, _2, _3)});
     _msgHandlerMap.insert({ADD_GROUP_MSG, std::bind(&ChatService::addGroup, this, _1, _2, _3)});
     _msgHandlerMap.insert({GROUP_CHAT_MSG, std::bind(&ChatService::groupChat, this, _1, _2, _3)});
+    _msgHandlerMap.insert({GROUP_FILE_UPLOAD_MSG, std::bind(&ChatService::groupfileupload, this, _1, _2, _3)});
+    _msgHandlerMap.insert({GROUP_FILE_DOWNLOAD_MSG, std::bind(&ChatService::groupfiledownload, this, _1, _2, _3)});
+    _msgHandlerMap.insert({GROUP_FILE_DELETE_MSG, std::bind(&ChatService::groupfiledelete, this, _1, _2, _3)});
+    _msgHandlerMap.insert({GROUP_FILE_GET_ALL_MSG, std::bind(&ChatService::groupallfile, this, _1, _2, _3)});
 
     //利用redis发布订阅模式当作消息队列
     // 连接redis服务器
@@ -41,6 +46,12 @@ ChatService::ChatService()
         consumer_->message();
     });
     t.detach();
+    
+    // 初始化 dataserver_cli 对象
+    unique_lock<mutex> lock(dataserver_cli_lock);
+    if(dataserver_ == nullptr) {
+        dataserver_ = new DataServerClient();
+    }
 }
 
 // 服务器异常，业务重置方法
@@ -350,6 +361,86 @@ void ChatService::groupChat(const TcpConnectionPtr &conn, json &js, Timestamp ti
     }
 }
 
+// 群组文件上传
+void ChatService::groupfileupload(const TcpConnectionPtr &conn, json &js, Timestamp time)
+{
+    int groupid = js["groupid"].get<int>(); // 群组id号，也是上传文件目录的根目录
+    string uploadpath = js["uploadpath"].get<string>();
+    uploadpath = "/" + to_string(groupid) + uploadpath;
+    string contents = js["contents"].get<string>();
+    std::unique_lock<std::mutex> lock(dataserver_cli_lock);
+    dataserver_->Add(uploadpath, contents);
+}
+
+// 群组文件下载
+void ChatService::groupfiledownload(const TcpConnectionPtr &conn, json &js, Timestamp time)
+{
+    int groupid = js["groupid"].get<int>(); // 群组id号，也是上传文件目录的根目录
+    string uploadpath = js["downloadpath"].get<string>();
+    uploadpath = "/" + to_string(groupid) + uploadpath;
+    string contents = js["contents"].get<string>();
+    std::unique_lock<std::mutex> lock(dataserver_cli_lock);
+    std::string result = dataserver_->Get(uploadpath);
+    js["result"] = result;
+    int userid = js["id"].get<int>();
+    auto it = _userConnMap.find(userid);
+    if(it != _userConnMap.end())
+    {
+        // 回复文件内容消息
+        it->second->send(js.dump());
+    }
+    else
+    {
+
+    }
+}
+
+// 群组文件删除
+void ChatService::groupfiledelete(const TcpConnectionPtr &conn, json &js, Timestamp time)
+{
+    int groupid = js["groupid"].get<int>(); // 群组id号，也是上传文件目录的根目录
+    string uploadpath = js["deletepath"].get<string>();
+    uploadpath = "/" + to_string(groupid) + uploadpath;
+    string contents = js["contents"].get<string>();
+    std::unique_lock<std::mutex> lock(dataserver_cli_lock);
+    dataserver_->Del(uploadpath);
+}
+// 获取群组文件结构
+void ChatService::groupallfile(const TcpConnectionPtr &conn, json &js, Timestamp time) 
+{
+    int groupid = js["groupid"].get<int>(); // 群组id号，也是上传文件目录的根目录
+    std::unique_lock<std::mutex> lock(dataserver_cli_lock);
+    Node* result = dataserver_->GetAll(groupid);
+    // 将 Node* 的内容转化为 string 类型结构
+    std::string str_res = ("/\\n");
+    int spacenum = 0;
+    for(int i = 0; i < result->childs.size(); i++)
+    {
+        parseNode(result->childs[i], str_res, spacenum + 1);
+    }
+    js["result"] = str_res;
+    auto it = _userConnMap.find(js["id"].get<int>());
+    if(it != _userConnMap.end())
+    {
+        it->second->send(js.dump());
+    }
+}
+void parseNode(Node* cur, string& str_res, int spacenum)
+{
+    for(int i = 0;i < spacenum; i++)
+    {
+        str_res += " ";
+    }
+    str_res += (cur->file_name + "\\n");
+    if(!cur->is_file)
+    {
+        for(int i = 0; i < cur->childs.size(); i++)
+        {
+            parseNode(cur->childs[i], str_res, spacenum + 1);
+        }
+    }
+}
+
 // 从redis消息队列中获取订阅的消息
 void ChatService::handleRedisSubscribeMessage(int userid, string msg)
 {
@@ -367,4 +458,5 @@ void ChatService::handleRedisSubscribeMessage(int userid, string msg)
 ChatService::~ChatService(){
     delete consumer_;
     delete producer_;
+    delete dataserver_;
 }
